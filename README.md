@@ -2,17 +2,37 @@
 
 > 个人生涯操作系统 · **去敏模板仓库**
 
-一套把饮食、运动、睡眠、饮水、身体指标、投资等数据统一沉淀到 Git 仓库的 Agent 工作流框架。你只负责「发内容」（照片、截图、一句话），Agent 负责识别、解析、结构化、汇总、入库、可视化。
+一套把饮食、运动、睡眠、身体指标、投资等数据统一沉淀到 Git 仓库的 Agent 工作流框架。
 
-**本仓库只含方法论与骨架，无任何真实个人数据。** 所有数值均为占位符或随机示例。详见 [PRIVACY.md](PRIVACY.md)。
+**你的唯一动作是「发内容」**——一张照片、一张截图、一句话。剩下的识别、解析、结构化、入库、汇总、出图，全部由 Agent 完成。
 
-## 这是什么
+**本仓库只含方法论与骨架，无任何真实个人数据。** 所有数值均为占位符或随机示例，详见 [PRIVACY.md](PRIVACY.md)。
 
-life-os 不是软件，而是一套**约定 + Skill 集合**：
+---
 
-- 约定数据怎么存（`schema/`）、放哪（`domains/`）、怎么规范化（`scripts/`）。
-- Skill 是 Agent 的能力单元（`skills/`），每个 `SKILL.md` 描述「收到什么 → 怎么做 → 产出什么」。
-- 使用者克隆后，填入自己的数据，由一个长期运行的 Agent 驱动。
+## 30 秒理解它
+
+life-os 不是软件，是一套**约定 + Skill 集合**。装上它，你的 Agent 就拥有了一套「个人数据管理员」的能力。
+
+```text
+你 ──发一张餐食照片──▶ Agent
+                        │
+                        ├─ 识别：这是 meal（餐食）
+                        ├─ 解析：估算热量、蛋白质、碳水、脂肪
+                        ├─ 入库：写入 domains/health/data/meals/2025-01.json
+                        ├─ 规范化：跑脚本统一结构
+                        └─ 可视化：dashboard/index.html 出现新的数据点
+```
+
+三个核心约定：
+
+- 数据怎么存 → 看 [`schema/`](schema/data-schema.md)
+- 数据放哪 → 看 [`domains/`](domains/)
+- Agent 怎么干 → 看 [`skills/`](skills/README.md)，每个 `SKILL.md` 就是一份「收到什么 → 怎么做 → 产出什么」的说明书
+
+使用者克隆后填入自己的数据，由一个长期运行的 Agent 驱动。
+
+---
 
 ## 快速开始
 
@@ -20,19 +40,70 @@ life-os 不是软件，而是一套**约定 + Skill 集合**：
 git clone https://github.com/cheriechen200/life.git
 cd life
 
-# 1. 建自己的数据目录（已 gitignore，不会误提交）
+# 1. 建自己的数据目录（已 gitignore，真实数据不会误提交）
 mkdir -p domains/health/data/{meals,workouts,sleep,water,body_comp}
 
-# 2.（可选）建个人健康档案
+# 2.（可选）建个人健康档案，让养生建议因人而异
 cp skills/yangsheng-health/references/personal-profile.template.md \
    skills/yangsheng-health/references/personal-profile.md
 
-# 3. 把 skills/ 目录挂到你的 Agent（如 Knot / Claude / Cursor）
+# 3. 把 skills/ 目录挂到你的 Agent（Knot / Claude / Cursor 均可）
 
 # 4. 发一张餐食照片给 Agent，看它入库
 ```
 
 查看面板：把 `dashboard/data.sample.js` 复制为 `dashboard/data.js`，双击 `dashboard/index.html` 即可（单文件、无后端、无需构建）。
+
+---
+
+## 每日最佳实践
+
+这套系统跑得顺不顺，取决于**记录节奏**，而不是工具本身。推荐节奏如下。
+
+### 晨间（2 分钟）
+
+| 时间 | 动作 | 触发 |
+| --- | --- | --- |
+| 起床后 | 发睡眠报告截图 | `sleep-parse` |
+| 早餐后 | 发一张餐食照片 | `meal-nutrition` |
+| 09:00 | 「生成今日简报」 | `invest-morning` |
+
+### 日间（随手，每条 10 秒）
+
+| 时刻 | 动作 | 触发 |
+| --- | --- | --- |
+| 每餐后 | 发餐食照片 | `meal-nutrition` |
+| 训练后 | 发运动记录截图 | `workout-parse` |
+| 喝水时 | 「我喝了 2 杯水」 | `water-log` |
+| 有交易 | 发持仓/成交截图 | `invest-router` / `fund-router` |
+
+### 晚间（3 分钟）
+
+| 时间 | 动作 | 触发 |
+| --- | --- | --- |
+| 22:30 | 「生成今天的日报」 | `report-daily` |
+| 需要时 | 打开 `dashboard/index.html` 看趋势 | `dashboard` |
+
+### 周期性
+
+| 周期 | 动作 | 触发 |
+| --- | --- | --- |
+| 每周日 22:00 | 「生成周报」 | `report-periodic` |
+| 每月末 22:00 | 「生成月报」 | `report-periodic` |
+| 每周 | 「复盘训练」 | `training-review` |
+| 每周 | 「复盘本周」 | `invest-review` |
+| 体检后 | 发体检报告 | `medical-report` |
+| 体测后 | 发 InBody 报告 | `body-comp` |
+
+**三条让它真正用起来的经验：**
+
+1. **不要攒着记。** 餐食当场拍，比晚上回忆准得多，也更容易坚持。
+2. **不必指定 Skill。** 直接发内容，`capture-router` 会判断领域并自动分发。
+3. **定时交给 Agent。** 把「每晚 22:30 生成日报」这类指令配成定时任务（`automations/`，目录已预留），你只管白天发内容。
+
+> 健康与投资内容仅供个人记录与方法论参考，不构成医学诊断或投资建议。
+
+---
 
 ## 我要做什么 → 找谁
 
@@ -56,7 +127,9 @@ cp skills/yangsheng-health/references/personal-profile.template.md \
 | 看趋势 | 「生成周报 / 月报」 | `report-periodic` |
 | 看图表 | 打开 `dashboard/index.html` | `dashboard` |
 
-> 不必手动指定 Skill，直接发内容，`capture-router` 会判断领域并分发。全部索引见 [`skills/README.md`](skills/README.md)。
+> 全部索引见 [`skills/README.md`](skills/README.md)。
+
+---
 
 ## 目录结构
 
@@ -71,7 +144,7 @@ life/
 │   ├── invest-morning/ invest-review/ stock-research/
 │   ├── fund-router/ fund-position/ fund-note/ fund-research/
 │   ├── life-guide/ report-daily/ report-periodic/ dashboard/
-│   └── career-*/ reading-log/ habit-tracker/ reflection-log/   # 规划中
+│   └── career-*/ reading-log/ habit-tracker/ reflection-log/
 ├── domains/                 # 数据存放地（空骨架，真实数据 gitignore）
 │   ├── health/data/         # meals workouts sleep naps water body_comp …
 │   ├── invest/data/         # positions trades notes reviews watchlist
@@ -82,15 +155,18 @@ life/
 │   ├── repo-root.sh         # 环境无关定位仓库根
 │   ├── normalize_health_data.py
 │   ├── normalize_invest_data.py
-│   └── normalize_fund_data.py
+│   ├── normalize_fund_data.py
+│   └── sync.sh              # 提交并推送
 ├── dashboard/
 │   ├── index.html           # 单文件面板，双击可开
 │   └── data.sample.js       # 示例数据（假数据，仅演示）
-├── examples/                # 使用示例
-├── automations/             # 定时任务提示词（预留）
+├── automations/             # 定时任务提示词（目录已预留）
+├── reports/                 # 日报/周报/月报输出
 ├── PRIVACY.md               # 隐私声明
 └── README.md
 ```
+
+---
 
 ## 设计理念
 
