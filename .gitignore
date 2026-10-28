@@ -1,0 +1,28 @@
+# ---- 真实数据：绝不入库 ----
+domains/*/data/
+domains/**/data/
+data/
+data/daily/
+reports/
+dashboard/data.js
+automations/*.local.md
+
+# ---- 个人敏感档案 ----
+skills/yangsheng-health/references/personal-profile.md
+
+# ---- 原始附件 ----
+data/raw/
+*.jpg
+*.jpeg
+*.png
+*.heic
+*.pdf
+
+# ---- 系统与编辑器 ----
+.DS_Store
+.idea/
+.vscode/
+__pycache__/
+*.pyc
+tmp/
+.env

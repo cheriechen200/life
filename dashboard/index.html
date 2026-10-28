@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>life-os · 健康数据面板</title>
+<script src="data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --border: #262b36;
+    --text: #e6e9ef; --muted: #8b93a3; --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  header {
+    padding: 18px 28px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  header h1 { font-size: 19px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 12px; }
+  header .spacer { flex: 1; }
+  select {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px; font-size: 13px; margin-left: 8px;
+  }
+  .tabs { display: flex; gap: 8px; padding: 16px 28px 0; align-items: center; }
+  .tab {
+    padding: 7px 18px; border: 1px solid var(--border); border-radius: 999px;
+    background: transparent; color: var(--muted); cursor: pointer; font-size: 14px;
+  }
+  .tab.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .seg { display: flex; margin-left: auto; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button {
+    padding: 6px 14px; border: 0; background: transparent; color: var(--muted);
+    cursor: pointer; font-size: 13px;
+  }
+  .seg button.active { background: var(--panel); color: var(--text); }
+  .summary { display: flex; gap: 12px; padding: 20px 28px 0; flex-wrap: wrap; }
+  .stat {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 12px; padding: 13px 17px; min-width: 132px;
+  }
+  .stat .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+  .stat .value { font-size: 21px; font-weight: 600; }
+  .stat .value small { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 3px; }
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(430px, 1fr));
+    gap: 15px; padding: 20px 28px 40px;
+  }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 15px; }
+  .card h3 { margin: 0 0 10px; font-size: 14px; font-weight: 600; }
+.card h3 span { color: var(--muted); font-weight: 400; font-size: 12px; margin-left: 6px; }
+.card .desc { color: var(--muted); font-size: 12px; line-height: 1.6; margin: -4px 0 10px; }
+  .section-head { padding: 28px 28px 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .section-head h2 { font-size: 15px; margin: 0; }
+  .section-head .sub { color: var(--muted); font-size: 12px; }
+  .chart { width: 100%; height: 290px; }
+.empty { color: var(--muted); font-size: 13px; padding: 40px; text-align: center; }
+
+  /* ===== 移动端适配（iPhone 14 Pro 等窄屏：393 × 852） ===== */
+  @media (max-width: 640px) {
+    header {
+      padding: 14px calc(16px + env(safe-area-inset-right)) 14px calc(16px + env(safe-area-inset-left));
+      gap: 8px;
+    }
+    header h1 { font-size: 17px; }
+    header .sub { font-size: 11px; width: 100%; order: 3; }
+    header .spacer { display: none; }
+    select { margin-left: 0; margin-right: 0; flex: 1; min-width: 130px; }
+
+    .tabs {
+      padding: 12px calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));
+      flex-wrap: wrap; gap: 8px;
+    }
+    .tab { padding: 6px 14px; font-size: 13px; }
+    .seg { margin-left: 0; width: 100%; }
+    .seg button { flex: 1; padding: 8px 0; font-size: 13px; }
+
+    .summary {
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      padding: 14px calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));
+      gap: 10px;
+    }
+    .stat { min-width: 0; padding: 11px 13px; }
+    .stat .label { font-size: 11px; margin-bottom: 4px; }
+    .stat .value { font-size: 18px; }
+
+    .grid {
+      grid-template-columns: 1fr;
+      padding: 14px calc(16px + env(safe-area-inset-right)) 24px calc(16px + env(safe-area-inset-left));
+      gap: 12px;
+    }
+    .card { padding: 12px; }
+    .card h3 { font-size: 13px; }
+    .card .desc { font-size: 11px; }
+
+    .section-head {
+      padding: 22px calc(16px + env(safe-area-inset-right)) 0 calc(16px + env(safe-area-inset-left));
+      gap: 6px;
+    }
+    .section-head h2 { font-size: 14px; }
+    .section-head .sub { font-size: 11px; width: 100%; }
+
+    .chart { height: 230px; }
+  }
+
+  @media (max-width: 360px) {
+    .summary { grid-template-columns: 1fr; }
+    .chart { height: 210px; }
+  }
+
+  /* 横屏 / 平板：保持双列但收紧内边距 */
+  @media (min-width: 641px) and (max-width: 900px) {
+    .grid { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); padding-left: 20px; padding-right: 20px; }
+    .summary { padding-left: 20px; padding-right: 20px; }
+    header, .tabs, .section-head { padding-left: 20px; padding-right: 20px; }
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>life-os</h1>
+    <span class="sub">健康数据 · 可视化面板</span>
+    <span class="spacer"></span>
+    <select id="periodSelect"></select>
+  </header>
+
+  <div class="tabs">
+    <span class="tab active" style="cursor:default">健康</span>
+    <div class="seg">
+      <button class="active" data-gran="month">按月</button>
+      <button data-gran="year">按年</button>
+    </div>
+  </div>
+
+<div id="summary" class="summary"></div>
+  <div id="app" class="grid"></div>
+<div id="bcsection" style="display:none">
+    <div class="section-head"><h2>身体成分</h2><span class="sub">InBody · 全周期时间轴，不随上方周期切换</span></div>
+    <div id="bcsummary" class="summary"></div>
+    <div id="bcapp" class="grid"></div>
+  </div>
+
+<script>
+const DATA_PATH = "../domains/health/data";
+const MONTHS = buildMonths("2020-03", "2025-10");
+const YEARS = ["2020","2021","2022","2023","2024","2025","2026"];
+
+function buildMonths(start, end) {
+  const out = []; let [y, m] = start.split("-").map(Number); const [ey, em] = end.split("-").map(Number);
+  while (y < ey || (y === ey && m <= em)) { out.push(`${y}-${String(m).padStart(2,"0")}`); m++; if (m > 12) { m = 1; y++; } }
+  return out;
+}
+
+async function loadJSON(path) {
+  try { const res = await fetch(path); if (!res.ok) return []; const d = await res.json(); return Array.isArray(d) ? d : []; }
+  catch (e) { return []; }
+}
+
+let state = { gran: "month", period: "2025-10" };
+
+const sum = a => a.reduce((s, v) => s + (typeof v === "number" && !isNaN(v) ? v : 0), 0);
+const mean = a => { const v = a.filter(x => typeof x === "number" && !isNaN(x)); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
+const round = (x, n = 0) => x === null || x === undefined ? null : Number(x.toFixed(n));
+const keyOf = r => state.gran === "month" ? r.date : r.date.slice(0, 7);
+const fmtLabel = v => state.gran === "month" ? v.slice(5) : Number(v.slice(5)) + "月";
+
+const inPeriod = r => state.gran === "month" ? r.date.startsWith(state.period) : r.date.startsWith(state.period + "-");
+
+// 数据来源优先级：内嵌数据包（file:// 可直开） > 按月 fetch（http 环境）
+async function loadHealth() {
+const bundle = window.LIFE_OS_DATA;
+  if (bundle) {
+    return { meals: (bundle.meals||[]).filter(inPeriod), workouts: (bundle.workouts||[]).filter(inPeriod),
+             sleep: (bundle.sleep||[]).filter(inPeriod), daily: (bundle.daily||[]).filter(inPeriod),
+             body_comp: (bundle.body_comp||[]).filter(inPeriod), water: (bundle.water||[]).filter(inPeriod),
+             all_body_comp: bundle.body_comp||[] };
+  }
+  const months = state.gran === "month" ? [state.period] : MONTHS.filter(m => m.startsWith(state.period + "-"));
+const acc = { meals: [], workouts: [], sleep: [], daily: [], body_comp: [], water: [], all_body_comp: [] };
+  for (const m of months) {
+    acc.meals = acc.meals.concat(await loadJSON(`${DATA_PATH}/meals/${m}.json`));
+    acc.workouts = acc.workouts.concat(await loadJSON(`${DATA_PATH}/workouts/${m}.json`));
+    acc.sleep = acc.sleep.concat(await loadJSON(`${DATA_PATH}/sleep/${m}.json`));
+    acc.daily = acc.daily.concat(await loadJSON(`${DATA_PATH}/daily/${m}.json`));
+    acc.water = acc.water.concat(await loadJSON(`${DATA_PATH}/water/${m}.json`));
+  }
+  for (const m of MONTHS) {
+    acc.all_body_comp = acc.all_body_comp.concat(await loadJSON(`${DATA_PATH}/body_comp/${m}.json`));
+  }
+  acc.body_comp = acc.all_body_comp.filter(inPeriod);
+  return acc;
+}
+
+function buckets(allRecords) {
+  return [...new Set(allRecords.map(keyOf))].sort();
+}
+
+function series(records, labels, valFn, agg) {
+  const g = {};
+  records.forEach(r => { const k = keyOf(r); (g[k] = g[k] || []).push(valFn(r)); });
+  return labels.map(l => {
+    const vals = (g[l] || []).filter(v => typeof v === "number" && !isNaN(v));
+    if (!vals.length) return null;
+    const s = vals.reduce((a, b) => a + b, 0);
+    return round(agg === "sum" ? s : s / vals.length, 1);
+  });
+}
+
+const TS = { color: "#8b93a3" };
+const axisY = name => ({ type: "value", name: name || "", axisLabel: { color: "#8b93a3" }, splitLine: { lineStyle: { color: "#262b36" } } });
+const axisX = labels => ({ type: "category", data: labels, axisLabel: { color: "#8b93a3", fontSize: 11, formatter: fmtLabel } });
+const grid = { left: 52, right: 52, top: 40, bottom: 30 };
+const ACTIVITY_CN = { strength_training: "力量训练", functional_strength_training: "功能性力量训练", core_training: "核心训练", outdoor_cycling: "户外骑行", hiit: "高强度间歇", running: "跑步", cycling: "骑行", walking: "步行", swimming: "游泳", rowing: "划船" };
+const INTENSITY_CN = { low: "低强度", moderate: "中等强度", high: "高强度" };
+const cnActivity = a => ACTIVITY_CN[a] || "其他";
+const cnIntensity = i => INTENSITY_CN[i] || "未记录";
+const isNarrow = () => window.innerWidth <= 640;
+function draw(id, option) {
+  if (isNarrow() && option.grid) {
+    option.grid = { ...option.grid, left: 38, right: 38, top: 46, bottom: 24 };
+  }
+  const inst = echarts.init(document.getElementById(id));
+  inst.setOption(option);
+  return inst;
+}
+function card(title, id, hint, desc) { return `<div class="card"><h3>${title}${hint ? `<span>${hint}</span>` : ""}</h3>${desc ? `<p class="desc">${desc}</p>` : ""}<div id="${id}" class="chart"></div></div>`; }
+
+function statCard(label, value, unit) {
+  return `<div class="stat"><div class="label">${label}</div><div class="value">${value}${unit ? `<small>${unit}</small>` : ""}</div></div>`;
+}
+
+function renderHealth(data) {
+const app = document.getElementById("app");
+  const ml = data.meals || [], w = data.workouts || [], sl = data.sleep || [], dl = data.daily || [];
+  const wt = data.water || [];
+  const labels = buckets([...ml, ...w, ...sl, ...dl, ...wt]);
+
+  const wMin = sum(w.map(r => r.metrics.duration_min));
+  const wBurn = sum(w.map(r => r.metrics.calories_burned));
+  const avgSleep = mean(sl.map(r => r.metrics.total_min));
+  const avgSteps = mean(dl.map(r => r.metrics.steps));
+  const avgRhr = mean(dl.map(r => r.metrics.resting_heart_rate));
+  const h = avgSleep ? Math.floor(avgSleep / 60) : "-";
+  const mm = avgSleep ? Math.round(avgSleep % 60) : "";
+
+  document.getElementById("summary").innerHTML =
+    statCard("训练次数", w.length || "-", "次") +
+    statCard("训练总时长", Math.round(wMin) || "-", "分钟") +
+    statCard("运动消耗", Math.round(wBurn) || "-", "kcal") +
+    statCard("平均睡眠", `${h}${mm !== "" ? `<small>h</small>${mm}` : ""}`, mm !== "" ? "m" : "") +
+    statCard("日均步数", avgSteps ? Math.round(avgSteps).toLocaleString() : "-", "") +
+    statCard("平均静息心率", avgRhr ? Math.round(avgRhr) : "-", "bpm") +
+    (wt.length ? statCard("日均饮水", Math.round(sum(wt.map(r => r.metrics.amount_ml)) / (labels.length || 1)), "ml") : "");
+
+  if (!labels.length) { app.innerHTML = '<div class="empty">该周期暂无数据。</div>'; return; }
+
+  app.innerHTML =
+    card("步数趋势", "c1") +
+card("静息心率 & HRV", "c2", "2025-05 起", "HRV（心率变异性）是两次心跳间隔的波动大小，单位毫秒。心跳越「灵活」数值越高，代表身体恢复充分、状态放松；熬夜、压力或生病时数值会走低。它反映的是身体的「恢复余量」，与自己以往的中位数比较即可，无需与他人对比。") +
+    card("能量消耗", "c3", "活动 / 基础") +
+card("睡眠结构与评分", "c4", "", "REM（快速眼动睡眠）是睡眠的一个阶段，做梦主要发生在这里，负责情绪消化与记忆整理，此时大脑活跃但身体肌肉几乎「断电」。它多出现在后半夜且越睡越多，一整晚通常占全部睡眠的 20%~25%，熬夜或缺觉时最先受影响。") +
+    card("训练类型分布", "c5") +
+    card("训练强度分布", "c6", "按平均心率推导") +
+    card("热量收支", "c7") +
+card("身体指标", "c8", "体重 / VO2Max，数据稀疏", "VO2Max（最大摄氧量）是身体在极限运动时每公斤体重每分钟能利用的氧气量，单位 ml/kg/min，可理解为心肺的「发动机排量」。数值越高，同样的运动越轻松、越耐久，是耐力水平的硬指标，只能靠长期有氧训练提升。它受配速、坡度、当天状态影响，适合看长期趋势，不必纠结单次读数。");
+
+  draw("c1", {
+    tooltip: { trigger: "axis" }, grid, textStyle: TS, xAxis: axisX(labels), yAxis: axisY("步"),
+    series: [{ type: "line", smooth: true, data: series(dl, labels, r => r.metrics.steps, "avg"), areaStyle: { color: "rgba(79,209,139,0.15)" }, itemStyle: { color: "#4fd18b" } }],
+  });
+
+  draw("c2", {
+    tooltip: { trigger: "axis" }, legend: { data: ["静息心率", "HRV"], textStyle: TS, top: 0 }, grid, textStyle: TS, xAxis: axisX(labels),
+    yAxis: [axisY("bpm"), { ...axisY("ms"), position: "right", splitLine: { show: false } }],
+    series: [
+      { name: "静息心率", type: "line", smooth: true, data: series(dl, labels, r => r.metrics.resting_heart_rate, "avg"), itemStyle: { color: "#ff6b6b" } },
+      { name: "HRV", type: "line", smooth: true, yAxisIndex: 1, data: series(dl, labels, r => r.metrics.hrv_sdnn_ms, "avg"), itemStyle: { color: "#4f8cff" } },
+    ],
+  });
+
+  draw("c3", {
+    tooltip: { trigger: "axis" }, legend: { data: ["活动能量", "基础能量"], textStyle: TS, top: 0 }, grid, textStyle: TS, xAxis: axisX(labels), yAxis: axisY("kcal"),
+    series: [
+      { name: "活动能量", type: "bar", stack: "e", data: series(dl, labels, r => r.metrics.active_energy_kcal, "avg"), itemStyle: { color: "#ff8c4f" } },
+      { name: "基础能量", type: "bar", stack: "e", data: series(dl, labels, r => r.metrics.basal_energy_kcal, "avg"), itemStyle: { color: "#4f8cff" } },
+    ],
+  });
+
+  draw("c4", {
+    tooltip: { trigger: "axis" }, legend: { data: ["深睡", "浅睡", "REM", "评分"], textStyle: TS, top: 0 }, grid, textStyle: TS, xAxis: axisX(labels),
+    yAxis: [axisY("min"), { ...axisY("分"), position: "right", max: 100, splitLine: { show: false } }],
+    series: [
+      { name: "深睡", type: "bar", stack: "s", data: series(sl, labels, r => r.metrics.deep_min, "avg"), itemStyle: { color: "#4f8cff" } },
+      { name: "浅睡", type: "bar", stack: "s", data: series(sl, labels, r => r.metrics.light_min, "avg"), itemStyle: { color: "#8b93a3" } },
+      { name: "REM", type: "bar", stack: "s", data: series(sl, labels, r => r.metrics.rem_min, "avg"), itemStyle: { color: "#c04fff" } },
+      { name: "评分", type: "line", smooth: true, yAxisIndex: 1, data: series(sl, labels, r => r.metrics.sleep_score, "avg"), itemStyle: { color: "#4fd18b" } },
+    ],
+  });
+
+const byType = {}, byIntensity = {};
+  w.forEach(r => {
+    const t = cnActivity(r.metrics.activity);
+    byType[t] = (byType[t] || 0) + 1;
+    const it = cnIntensity(r.metrics.intensity);
+    byIntensity[it] = (byIntensity[it] || 0) + 1;
+  });
+  const pieData = obj => Object.entries(obj).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
+  draw("c5", { tooltip: { trigger: "item" }, textStyle: TS, series: [{ type: "pie", radius: ["40%", "68%"], data: pieData(byType), label: { color: "#8b93a3" } }] });
+  draw("c6", { tooltip: { trigger: "item" }, textStyle: TS, series: [{ type: "pie", radius: ["40%", "68%"], data: pieData(byIntensity), label: { color: "#8b93a3" } }] });
+
+  draw("c7", {
+    tooltip: { trigger: "axis" }, legend: { data: ["摄入", "运动消耗"], textStyle: TS, top: 0 }, grid, textStyle: TS, xAxis: axisX(labels), yAxis: axisY("kcal"),
+    series: [
+      { name: "摄入", type: "line", smooth: true, data: series(ml, labels, r => r.metrics.calories, "sum"), itemStyle: { color: "#4f8cff" } },
+      { name: "运动消耗", type: "line", smooth: true, data: series(w, labels, r => r.metrics.calories_burned, "sum"), itemStyle: { color: "#ff8c4f" } },
+    ],
+  });
+
+  draw("c8", {
+    tooltip: { trigger: "axis" }, legend: { data: ["体重", "VO2Max"], textStyle: TS, top: 0 }, grid, textStyle: TS, xAxis: axisX(labels),
+    yAxis: [axisY("kg"), { ...axisY("ml/kg/min"), position: "right", splitLine: { show: false } }],
+    series: [
+{ name: "体重", type: "line", smooth: true, connectNulls: true, data: series(dl, labels, r => r.metrics.weight_kg, "avg"), itemStyle: { color: "#ffb84f" } },
+{ name: "VO2Max", type: "line", smooth: true, connectNulls: true, yAxisIndex: 1, data: series(dl, labels, r => r.metrics.vo2max, "avg"), itemStyle: { color: "#4fd18b" } },
+    ],
+  });
+}
+
+// 身体成分：低频测量（每次间隔数月），独立于上方周期筛选，按真实测量日期铺满时间轴
+function renderBodyComp(bc, allDaily) {
+  const section = document.getElementById("bcsection");
+  const bcapp = document.getElementById("bcapp");
+  if (!bc || !bc.length) { section.style.display = "none"; bcapp.innerHTML = ""; return; }
+  section.style.display = "";
+
+  const sorted = bc.slice().sort((a, b) => a.date < b.date ? -1 : 1);
+  const dates = sorted.map(r => r.date);
+  const bcLabels = v => v.slice(2).replace("-", "/");
+  const axisBcX = { type: "category", data: dates, boundaryGap: false, axisLabel: { color: "#8b93a3", fontSize: 11, formatter: bcLabels } };
+
+  const latest = sorted[sorted.length - 1];
+  const prev = sorted.length > 1 ? sorted[sorted.length - 2] : null;
+
+  // 摘要：最新一次测量 + 与上次的对比
+  const deltaCard = (label, cur, pre, unit, invert) => {
+    if (cur == null) return "";
+    let extra = "";
+    if (pre != null && typeof cur === "number" && typeof pre === "number") {
+      const dv = cur - pre;
+      const good = invert ? dv < 0 : dv > 0;
+      const arrow = dv > 0 ? "↑" : dv < 0 ? "↓" : "→";
+      extra = `<small style="color:${good ? "#4fd18b" : "#ff6b6b"}">${arrow}${Math.abs(round(dv, 1))}</small>`;
+    }
+    return statCard(label, `${cur}${extra}`, unit);
+  };
+
+document.getElementById("bcsummary").innerHTML =
+    statCard("最新体测日", latest.date, "") +
+    deltaCard("体重", latest.metrics.weight_kg, prev && prev.metrics.weight_kg, "kg", true) +
+    deltaCard("骨骼肌", latest.metrics.skeletal_muscle_kg, prev && prev.metrics.skeletal_muscle_kg, "kg", false) +
+    deltaCard("体脂率", latest.metrics.body_fat_pct, prev && prev.metrics.body_fat_pct, "%", true) +
+    deltaCard("InBody 评分", latest.metrics.inbody_score, prev && prev.metrics.inbody_score, "分", false);
+
+  const line = (name, valFn, color, yAxisIndex) => ({
+    name, type: "line", smooth: true, connectNulls: true, symbolSize: 8,
+    data: sorted.map(r => { const v = valFn(r); return typeof v === "number" ? v : null; }),
+    itemStyle: { color }, yAxisIndex: yAxisIndex || 0,
+    label: { show: true, color: "#8b93a3", fontSize: 10, formatter: p => p.value == null ? "" : p.value },
+  });
+
+  bcapp.innerHTML =
+    card("体成分变化趋势", "bc1", "体重 / 骨骼肌 / 体脂率", "横轴为实际测量日期，间隔数月的测量点直接连线，反映真实变化轨迹。") +
+    card("身体成分评估", "bc2", "BMI / 内脏脂肪等级 / InBody 评分") +
+    card("节段肌肉量", "bc3", "左臂 / 右臂 / 躯干 / 左腿 / 右腿") +
+    card("节段脂肪量", "bc4", "左臂 / 右臂 / 躯干 / 左腿 / 右腿");
+
+  draw("bc1", {
+    tooltip: { trigger: "axis" }, legend: { data: ["体重", "骨骼肌", "体脂率"], textStyle: TS, top: 0 },
+    grid: { left: 52, right: 52, top: 40, bottom: 30 }, textStyle: TS, xAxis: axisBcX,
+    yAxis: [axisY("kg"), { ...axisY("%"), position: "right", splitLine: { show: false } }],
+    series: [
+      line("体重", r => r.metrics.weight_kg, "#ffb84f"),
+      line("骨骼肌", r => r.metrics.skeletal_muscle_kg, "#4fd18b"),
+      line("体脂率", r => r.metrics.body_fat_pct, "#ff6b6b", 1),
+    ],
+  });
+
+  draw("bc2", {
+    tooltip: { trigger: "axis" }, legend: { data: ["BMI", "内脏脂肪等级", "InBody 评分"], textStyle: TS, top: 0 },
+    grid: { left: 52, right: 52, top: 40, bottom: 30 }, textStyle: TS, xAxis: axisBcX,
+    yAxis: [axisY("指数"), { ...axisY("分"), position: "right", max: 100, splitLine: { show: false } }],
+    series: [
+      line("BMI", r => r.metrics.bmi, "#4f8cff"),
+      line("内脏脂肪等级", r => r.metrics.visceral_fat_level, "#ff8c4f"),
+      line("InBody 评分", r => r.metrics.inbody_score, "#c04fff", 1),
+    ],
+  });
+
+  const segParts = ["左臂", "右臂", "躯干", "左腿", "右腿"];
+  const segKeys = ["left_arm_kg", "right_arm_kg", "trunk_kg", "left_leg_kg", "right_leg_kg"];
+  const segColors = ["#4f8cff", "#4fd18b", "#ffb84f", "#c04fff", "#ff6b6b"];
+  const segData = (field) => {
+    const has = sorted.some(r => r.metrics[field]);
+    if (!has) return null;
+    return segParts.map((name, i) => ({
+      name, type: "line", smooth: true, connectNulls: true, symbolSize: 7, itemStyle: { color: segColors[i] },
+      data: sorted.map(r => { const v = r.metrics[field] && r.metrics[field][segKeys[i]]; return typeof v === "number" ? v : null; }),
+    }));
+  };
+  const segOption = (field, unit) => {
+    const s = segData(field);
+    if (!s) { return null; }
+    return {
+      tooltip: { trigger: "axis" }, legend: { data: segParts, textStyle: TS, top: 0 },
+      grid: { left: 52, right: 52, top: 40, bottom: 30 }, textStyle: TS, xAxis: axisBcX, yAxis: axisY(unit), series: s,
+    };
+  };
+  const o3 = segOption("segmental_muscle", "kg");
+  const o4 = segOption("segmental_fat", "kg");
+  if (o3) draw("bc3", o3); else document.getElementById("bc3").closest(".card").innerHTML = '<div class="empty">暂无节段肌肉数据。</div>';
+  if (o4) draw("bc4", o4); else document.getElementById("bc4").closest(".card").innerHTML = '<div class="empty">暂无节段脂肪数据。</div>';
+}
+
+async function boot() {
+  const data = await loadHealth();
+  renderHealth(data);
+  renderBodyComp(data.all_body_comp, data.daily);
+}
+
+const periodSel = document.getElementById("periodSelect");
+const LATEST_MONTH = MONTHS[MONTHS.length - 1];
+const LATEST_YEAR = YEARS[YEARS.length - 1];
+
+function fillPeriods() {
+  const list = state.gran === "month" ? MONTHS.slice().reverse() : YEARS.slice().reverse();
+  const cur = list.includes(state.period) ? state.period : list[0];
+  state.period = cur;
+  periodSel.innerHTML = list.map(v => `<option value="${v}"${v === cur ? " selected" : ""}>${v}</option>`).join("");
+}
+periodSel.addEventListener("change", () => { state.period = periodSel.value; boot(); });
+
+document.querySelectorAll(".seg button").forEach(btn => btn.addEventListener("click", () => {
+  document.querySelectorAll(".seg button").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active"); state.gran = btn.dataset.gran;
+  state.period = state.gran === "month" ? LATEST_MONTH : LATEST_YEAR;
+  fillPeriods(); boot();
+}));
+
+let lastNarrow = isNarrow();
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  const nowNarrow = isNarrow();
+  if (nowNarrow !== lastNarrow) {
+    lastNarrow = nowNarrow;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => boot(), 150);  // 跨断点：整体重绘
+    return;
+  }
+  document.querySelectorAll(".chart").forEach(el => { const i = echarts.getInstanceByDom(el); if (i) i.resize(); });
+});
+
+fillPeriods();
+boot();
+</script>
+</body>
+</html>
