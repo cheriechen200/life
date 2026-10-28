@@ -17,7 +17,7 @@ life-os 不是软件，而是一套**约定 + Skill 集合**：
 ## 快速开始
 
 ```bash
-git clone https://github.com/cheriechen40/life.git
+git clone https://github.com/cheriechen200/life.git
 cd life
 
 # 1. 建自己的数据目录（已 gitignore，不会误提交）
