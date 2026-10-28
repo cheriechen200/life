@@ -146,9 +146,9 @@
   </div>
 
 <script>
-const DATA_PATH = "../domains/health/data";
-const MONTHS = buildMonths("2020-03", "2025-10");
-const YEARS = ["2020","2021","2022","2023","2024","2025","2026"];
+const DATA_PATH = "../domains/health/data"; // 真实数据目录（gitignore）；演示用请把 data.sample.js 复制为 data.js
+const MONTHS = buildMonths("2024-01", "2024-12");
+const YEARS = ["2024"];
 
 function buildMonths(start, end) {
   const out = []; let [y, m] = start.split("-").map(Number); const [ey, em] = end.split("-").map(Number);
@@ -161,7 +161,7 @@ async function loadJSON(path) {
   catch (e) { return []; }
 }
 
-let state = { gran: "month", period: "2025-10" };
+let state = { gran: "month", period: "2024-12" };
 
 const sum = a => a.reduce((s, v) => s + (typeof v === "number" && !isNaN(v) ? v : 0), 0);
 const mean = a => { const v = a.filter(x => typeof x === "number" && !isNaN(x)); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
@@ -261,7 +261,7 @@ const app = document.getElementById("app");
 
   app.innerHTML =
     card("步数趋势", "c1") +
-card("静息心率 & HRV", "c2", "2025-05 起", "HRV（心率变异性）是两次心跳间隔的波动大小，单位毫秒。心跳越「灵活」数值越高，代表身体恢复充分、状态放松；熬夜、压力或生病时数值会走低。它反映的是身体的「恢复余量」，与自己以往的中位数比较即可，无需与他人对比。") +
+card("静息心率 & HRV", "c2", "", "HRV（心率变异性）是两次心跳间隔的波动大小，单位毫秒。心跳越「灵活」数值越高，代表身体恢复充分、状态放松；熬夜、压力或生病时数值会走低。它反映的是身体的「恢复余量」，与自己以往的中位数比较即可，无需与他人对比。") +
     card("能量消耗", "c3", "活动 / 基础") +
 card("睡眠结构与评分", "c4", "", "REM（快速眼动睡眠）是睡眠的一个阶段，做梦主要发生在这里，负责情绪消化与记忆整理，此时大脑活跃但身体肌肉几乎「断电」。它多出现在后半夜且越睡越多，一整晚通常占全部睡眠的 20%~25%，熬夜或缺觉时最先受影响。") +
     card("训练类型分布", "c5") +
