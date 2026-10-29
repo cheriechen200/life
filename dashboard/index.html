@@ -4,9 +4,38 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>life-os · 健康数据面板</title>
-<script src="data.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-<style>
+<script>
+  // ECharts 主 CDN + 备用 CDN（任一成功即可），避免演示时网络抖动导致图表空白
+  window.__ECHARTS_PROMISE = (function () {
+    var CDNS = [
+      "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js",
+      "https://unpkg.com/echarts@5/dist/echarts.min.js",
+      "https://cdnjs.cloudflare.com/ajax/libs/echarts/5.5.0/echarts.min.js"
+    ];
+    return new Promise(function (resolve) {
+      function load(i) {
+        if (i >= CDNS.length) {
+          document.body.insertAdjacentHTML("afterbegin",
+            '<div style="padding:12px 16px;background:#3a1d1d;color:#ffb4b4;border-bottom:1px solid #5c2b2b;font-size:13px">' +
+            "图表库加载失败（ECharts CDN 不可达）。数据本身已就绪，恢复网络后刷新即可。</div>");
+          resolve(false);
+          return;
+        }
+        var s = document.createElement("script");
+        s.src = CDNS[i];
+        s.onload = function () { resolve(true); };
+        s.onerror = function () { load(i + 1); };
+        document.head.appendChild(s);
+      }
+      load(0);
+    });
+  })();
+
+  function waitEcharts() {
+    if (window.echarts) return Promise.resolve(true);
+    return window.__ECHARTS_PROMISE || Promise.resolve(false);
+  }
+</script><style>
   :root {
     --bg: #0f1115; --panel: #171a21; --border: #262b36;
     --text: #e6e9ef; --muted: #8b93a3; --accent: #4f8cff;
@@ -147,8 +176,10 @@
 
 <script>
 const DATA_PATH = "../domains/health/data"; // 真实数据目录（gitignore）；演示用请把 data.sample.js 复制为 data.js
-const MONTHS = buildMonths("2024-01", "2024-12");
-const YEARS = ["2024"];
+// 候选月份范围：仅用于无 manifest 时按年聚合的遍历兜底；下拉框选项一律从实际数据推导
+const SCAN_MONTHS = buildMonths("2020-01", "2030-12");
+let AVAILABLE_MONTHS = []; // 数据中实际存在的月份
+let AVAILABLE_YEARS = [];  // 数据中实际存在的年份
 
 function buildMonths(start, end) {
   const out = []; let [y, m] = start.split("-").map(Number); const [ey, em] = end.split("-").map(Number);
@@ -161,7 +192,33 @@ async function loadJSON(path) {
   catch (e) { return []; }
 }
 
-let state = { gran: "month", period: "2024-12" };
+async function loadManifest(path) {
+  try { const res = await fetch(path); if (!res.ok) return {}; const d = await res.json(); return (d && typeof d === "object") ? d : {}; }
+  catch (e) { return {}; }
+}
+
+let state = { gran: "month", period: "" };
+
+// 依次尝试加载数据包：data.js（真实数据包，由 normalize_health_data.py 生成）
+// → data.sample.js（仓库自带的虚构示例数据，保证任何环境下双击即出图）
+function loadScript(src) {
+  return new Promise(resolve => {
+    const s = document.createElement("script");
+    s.src = src;
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.head.appendChild(s);
+  });
+}
+
+async function loadBundle(candidates) {
+  if (window.LIFE_OS_DATA) return window.LIFE_OS_DATA;
+  for (const f of candidates) {
+    const ok = await loadScript(f);
+    if (ok && window.LIFE_OS_DATA) return window.LIFE_OS_DATA;
+  }
+  return null;
+}
 
 const sum = a => a.reduce((s, v) => s + (typeof v === "number" && !isNaN(v) ? v : 0), 0);
 const mean = a => { const v = a.filter(x => typeof x === "number" && !isNaN(x)); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
@@ -171,16 +228,55 @@ const fmtLabel = v => state.gran === "month" ? v.slice(5) : Number(v.slice(5)) +
 
 const inPeriod = r => state.gran === "month" ? r.date.startsWith(state.period) : r.date.startsWith(state.period + "-");
 
-// 数据来源优先级：内嵌数据包（file:// 可直开） > 按月 fetch（http 环境）
-async function loadHealth() {
-const bundle = window.LIFE_OS_DATA;
-  if (bundle) {
-    return { meals: (bundle.meals||[]).filter(inPeriod), workouts: (bundle.workouts||[]).filter(inPeriod),
-             sleep: (bundle.sleep||[]).filter(inPeriod), daily: (bundle.daily||[]).filter(inPeriod),
-             body_comp: (bundle.body_comp||[]).filter(inPeriod), water: (bundle.water||[]).filter(inPeriod),
-             all_body_comp: bundle.body_comp||[] };
+// 从记录中提取实际存在的月份 / 年份，用于填充周期下拉框
+function collectPeriods(records) {
+  const months = new Set(), years = new Set();
+  for (const arr of records) {
+    for (const r of arr || []) {
+      if (!r || typeof r.date !== "string" || r.date.length < 7) continue;
+      months.add(r.date.slice(0, 7));
+      years.add(r.date.slice(0, 4));
+    }
   }
-  const months = state.gran === "month" ? [state.period] : MONTHS.filter(m => m.startsWith(state.period + "-"));
+  return { months: [...months].sort(), years: [...years].sort() };
+}
+
+function applyPeriods(records) {
+  const p = collectPeriods(records);
+  if (!p.months.length) return false;
+  AVAILABLE_MONTHS = p.months;
+  AVAILABLE_YEARS = p.years;
+  const list = state.gran === "month" ? AVAILABLE_MONTHS : AVAILABLE_YEARS;
+  state.period = list.includes(state.period) ? state.period : list[list.length - 1];
+  return true;
+}
+
+// 数据来源优先级：data.js（真实数据包） > domains/ 按月 JSON（HTTP 托管真实数据）
+//                 > data.sample.js（仓库自带虚构示例，保证任何环境双击即出图）
+async function loadHealth() {
+  const bundle = await loadBundle(["data.js"]);
+  if (bundle) {
+    const raw = { meals: bundle.meals||[], workouts: bundle.workouts||[], sleep: bundle.sleep||[],
+                  daily: bundle.daily||[], body_comp: bundle.body_comp||[], water: bundle.water||[],
+                  medical: bundle.medical||[], naps: bundle.naps||[] };
+    // 先按全量记录推导可选周期，再按当前周期过滤
+    applyPeriods([raw.meals, raw.workouts, raw.sleep, raw.daily, raw.body_comp, raw.water]);
+    return { meals: raw.meals.filter(inPeriod), workouts: raw.workouts.filter(inPeriod),
+             sleep: raw.sleep.filter(inPeriod), daily: raw.daily.filter(inPeriod),
+             body_comp: raw.body_comp.filter(inPeriod), water: raw.water.filter(inPeriod),
+             all_body_comp: raw.body_comp };
+  }
+  // HTTP 托管模式：先读 manifest.json 拿到可选月份，再按当前周期取数
+  const manifest = await loadManifest(`${DATA_PATH}/manifest.json`);
+  const mMonths = Array.isArray(manifest.months) ? manifest.months : [];
+  const mYears = Array.isArray(manifest.years) ? manifest.years : [];
+  if (mMonths.length) {
+    AVAILABLE_MONTHS = mMonths;
+    AVAILABLE_YEARS = mYears.length ? mYears : [...new Set(mMonths.map(m => m.slice(0, 4)))];
+    const list = state.gran === "month" ? AVAILABLE_MONTHS : AVAILABLE_YEARS;
+    state.period = list.includes(state.period) ? state.period : list[list.length - 1];
+  }
+  const months = state.gran === "month" ? [state.period] : (AVAILABLE_MONTHS.length ? AVAILABLE_MONTHS.filter(m => m.startsWith(state.period + "-")) : SCAN_MONTHS.filter(m => m.startsWith(state.period + "-")));
 const acc = { meals: [], workouts: [], sleep: [], daily: [], body_comp: [], water: [], all_body_comp: [] };
   for (const m of months) {
     acc.meals = acc.meals.concat(await loadJSON(`${DATA_PATH}/meals/${m}.json`));
@@ -189,10 +285,25 @@ const acc = { meals: [], workouts: [], sleep: [], daily: [], body_comp: [], wate
     acc.daily = acc.daily.concat(await loadJSON(`${DATA_PATH}/daily/${m}.json`));
     acc.water = acc.water.concat(await loadJSON(`${DATA_PATH}/water/${m}.json`));
   }
-  for (const m of MONTHS) {
+  const bcMonths = AVAILABLE_MONTHS.length ? AVAILABLE_MONTHS : SCAN_MONTHS;
+  for (const m of bcMonths) {
     acc.all_body_comp = acc.all_body_comp.concat(await loadJSON(`${DATA_PATH}/body_comp/${m}.json`));
   }
   acc.body_comp = acc.all_body_comp.filter(inPeriod);
+
+  // 无真实数据可用时回退到仓库自带的示例数据，保证演示环境也能出图
+  if (!acc.meals.length && !acc.daily.length && !acc.workouts.length && !acc.sleep.length) {
+    const sample = await loadBundle(["data.sample.js"]);
+    if (sample) {
+      const raw = { meals: sample.meals||[], workouts: sample.workouts||[], sleep: sample.sleep||[],
+                    daily: sample.daily||[], body_comp: sample.body_comp||[], water: sample.water||[] };
+      applyPeriods([raw.meals, raw.workouts, raw.sleep, raw.daily, raw.body_comp, raw.water]);
+      return { meals: raw.meals.filter(inPeriod), workouts: raw.workouts.filter(inPeriod),
+               sleep: raw.sleep.filter(inPeriod), daily: raw.daily.filter(inPeriod),
+               body_comp: raw.body_comp.filter(inPeriod), water: raw.water.filter(inPeriod),
+               all_body_comp: raw.body_comp };
+    }
+  }
   return acc;
 }
 
@@ -239,6 +350,8 @@ const app = document.getElementById("app");
   const ml = data.meals || [], w = data.workouts || [], sl = data.sleep || [], dl = data.daily || [];
   const wt = data.water || [];
   const labels = buckets([...ml, ...w, ...sl, ...dl, ...wt]);
+  // 按年视图下 buckets 的粒度是「月」，日均类指标必须用实际天数做分母
+  const dayCount = new Set([...ml, ...w, ...sl, ...dl, ...wt].map(r => r.date)).size || 1;
 
   const wMin = sum(w.map(r => r.metrics.duration_min));
   const wBurn = sum(w.map(r => r.metrics.calories_burned));
@@ -255,7 +368,7 @@ const app = document.getElementById("app");
     statCard("平均睡眠", `${h}${mm !== "" ? `<small>h</small>${mm}` : ""}`, mm !== "" ? "m" : "") +
     statCard("日均步数", avgSteps ? Math.round(avgSteps).toLocaleString() : "-", "") +
     statCard("平均静息心率", avgRhr ? Math.round(avgRhr) : "-", "bpm") +
-    (wt.length ? statCard("日均饮水", Math.round(sum(wt.map(r => r.metrics.amount_ml)) / (labels.length || 1)), "ml") : "");
+    (wt.length ? statCard("日均饮水", Math.round(sum(wt.map(r => r.metrics.amount_ml)) / dayCount), "ml") : "");
 
   if (!labels.length) { app.innerHTML = '<div class="empty">该周期暂无数据。</div>'; return; }
 
@@ -427,17 +540,18 @@ document.getElementById("bcsummary").innerHTML =
 }
 
 async function boot() {
+  await waitEcharts();
   const data = await loadHealth();
+  fillPeriods();
   renderHealth(data);
   renderBodyComp(data.all_body_comp, data.daily);
 }
 
 const periodSel = document.getElementById("periodSelect");
-const LATEST_MONTH = MONTHS[MONTHS.length - 1];
-const LATEST_YEAR = YEARS[YEARS.length - 1];
 
 function fillPeriods() {
-  const list = state.gran === "month" ? MONTHS.slice().reverse() : YEARS.slice().reverse();
+  const list = state.gran === "month" ? AVAILABLE_MONTHS.slice().reverse() : AVAILABLE_YEARS.slice().reverse();
+  if (!list.length) return;
   const cur = list.includes(state.period) ? state.period : list[0];
   state.period = cur;
   periodSel.innerHTML = list.map(v => `<option value="${v}"${v === cur ? " selected" : ""}>${v}</option>`).join("");
@@ -447,7 +561,7 @@ periodSel.addEventListener("change", () => { state.period = periodSel.value; boo
 document.querySelectorAll(".seg button").forEach(btn => btn.addEventListener("click", () => {
   document.querySelectorAll(".seg button").forEach(b => b.classList.remove("active"));
   btn.classList.add("active"); state.gran = btn.dataset.gran;
-  state.period = state.gran === "month" ? LATEST_MONTH : LATEST_YEAR;
+  state.period = "";
   fillPeriods(); boot();
 }));
 

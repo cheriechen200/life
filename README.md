@@ -52,7 +52,11 @@ cp skills/yangsheng-health/references/personal-profile.template.md \
 # 4. 发一张餐食照片给 Agent，看它入库
 ```
 
-查看面板：把 `dashboard/data.sample.js` 复制为 `dashboard/data.js`，双击 `dashboard/index.html` 即可（单文件、无后端、无需构建）。
+查看面板：**克隆后直接双击 `dashboard/index.html` 即可**（单文件、无后端、无需构建、无需安装任何环境）。仓库自带 `dashboard/data.sample.js`（虚构示例数据），面板会自动回退到它，所以任何环境下打开都能立刻出图。
+
+> 想看自己的真实数据：把数据放进 `domains/health/data/`，然后跑 `python3 scripts/normalize_health_data.py` 生成 `dashboard/data.js`，面板会自动优先读取它。
+>
+> 面板的周期下拉框由数据自动推导，无需改代码：内嵌数据包走 `meta.months`，HTTP 托管模式走 `domains/health/data/manifest.json`（由规范化脚本生成）。
 
 ---
 
@@ -158,8 +162,8 @@ life/
 │   ├── normalize_fund_data.py
 │   └── sync.sh              # 提交并推送
 ├── dashboard/
-│   ├── index.html           # 单文件面板，双击可开
-│   └── data.sample.js       # 示例数据（假数据，仅演示）
+│   ├── index.html           # 单文件面板，克隆后双击即开（含示例数据回退）
+│   └── data.sample.js       # 示例数据（虚构数值，仅演示）
 ├── automations/             # 定时任务提示词（目录已预留）
 ├── reports/                 # 日报/周报/月报输出
 ├── PRIVACY.md               # 隐私声明
@@ -204,6 +208,8 @@ python3 scripts/normalize_fund_data.py        # 场外基金
 python3 scripts/normalize_health_data.py --check   # 只审计不改
 ./scripts/sync.sh "chore: daily sync"         # 提交并推送
 ```
+
+规范化脚本同时产出两份供面板读取的索引：`dashboard/data.js`（内嵌数据包，`file://` 双击可用）与 `domains/health/data/manifest.json`（HTTP 托管模式下的月份索引）。两者都由数据推导，不写死年份。
 
 定时任务提示词放 `automations/`：建议每日 22:30 日报、每周日 22:00 周报、每月末 22:00 月报、每日 09:00 投资晨间简报。
 

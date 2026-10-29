@@ -21,6 +21,7 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPO_ROOT = os.path.dirname(SCRIPT_DIR)
 DATA_DIR = os.path.join(REPO_ROOT, "domains/health/data")
 BUNDLE_PATH = os.path.join(REPO_ROOT, "dashboard/data.js")
+MANIFEST_PATH = os.path.join(DATA_DIR, "manifest.json")
 
 TYPES = {
     "meals": "meal",
@@ -155,12 +156,21 @@ def process():
         bundle[folder] = recs
 
     if not CHECK_ONLY:
+        # meta.months：实际存在数据的月份，供面板生成周期下拉框，避免写死年份
+        months = sorted({r.get("date", "")[:7] for recs in bundle.values()
+                         for r in recs if r.get("date")})
+        years = sorted({m[:4] for m in months})
+        bundle["meta"] = {"months": months, "years": years}
         with open(BUNDLE_PATH, "w", encoding="utf-8") as f:
             f.write("// 自动生成，请勿手动编辑。由 scripts/normalize_health_data.py 生成。\n")
             f.write("// 供 dashboard 在 file:// 下直接读取，无需本地静态服务。\n")
             f.write("window.LIFE_OS_DATA = ")
             json.dump(bundle, f, ensure_ascii=False, separators=(",", ":"))
             f.write(";\n")
+        # manifest.json：HTTP 托管模式下（无 data.js）面板据此推导可选周期
+        with open(MANIFEST_PATH, "w", encoding="utf-8") as f:
+            json.dump({"months": months, "years": years}, f, ensure_ascii=False, indent=2)
+            f.write("\n")
 
     print(f"扫描记录 {total} 条")
     if issues:
