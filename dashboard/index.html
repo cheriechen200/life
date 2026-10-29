@@ -211,11 +211,24 @@ function loadScript(src) {
   });
 }
 
+// 数据包是否真的含记录：脚本在无数据时也会写出空包，此时应继续回退到示例数据
+function bundleHasRecords(b) {
+  if (!b || typeof b !== "object") return false;
+  return ["meals", "workouts", "sleep", "daily", "body_comp", "water", "medical", "naps"]
+    .some(k => Array.isArray(b[k]) && b[k].length > 0);
+}
+
 async function loadBundle(candidates) {
-  if (window.LIFE_OS_DATA) return window.LIFE_OS_DATA;
   for (const f of candidates) {
-    const ok = await loadScript(f);
-    if (ok && window.LIFE_OS_DATA) return window.LIFE_OS_DATA;
+    // 上一轮可能已加载到空包，先清掉再试下一个候选
+    if (window.LIFE_OS_DATA && !bundleHasRecords(window.LIFE_OS_DATA)) {
+      window.LIFE_OS_DATA = null;
+    }
+    if (!window.LIFE_OS_DATA) {
+      const ok = await loadScript(f);
+      if (!ok) continue;
+    }
+    if (bundleHasRecords(window.LIFE_OS_DATA)) return window.LIFE_OS_DATA;
   }
   return null;
 }
@@ -254,57 +267,56 @@ function applyPeriods(records) {
 // 数据来源优先级：data.js（真实数据包） > domains/ 按月 JSON（HTTP 托管真实数据）
 //                 > data.sample.js（仓库自带虚构示例，保证任何环境双击即出图）
 async function loadHealth() {
+  // 1) 真实数据包
   const bundle = await loadBundle(["data.js"]);
-  if (bundle) {
-    const raw = { meals: bundle.meals||[], workouts: bundle.workouts||[], sleep: bundle.sleep||[],
-                  daily: bundle.daily||[], body_comp: bundle.body_comp||[], water: bundle.water||[],
-                  medical: bundle.medical||[], naps: bundle.naps||[] };
-    // 先按全量记录推导可选周期，再按当前周期过滤
-    applyPeriods([raw.meals, raw.workouts, raw.sleep, raw.daily, raw.body_comp, raw.water]);
-    return { meals: raw.meals.filter(inPeriod), workouts: raw.workouts.filter(inPeriod),
-             sleep: raw.sleep.filter(inPeriod), daily: raw.daily.filter(inPeriod),
-             body_comp: raw.body_comp.filter(inPeriod), water: raw.water.filter(inPeriod),
-             all_body_comp: raw.body_comp };
-  }
-  // HTTP 托管模式：先读 manifest.json 拿到可选月份，再按当前周期取数
-  const manifest = await loadManifest(`${DATA_PATH}/manifest.json`);
-  const mMonths = Array.isArray(manifest.months) ? manifest.months : [];
-  const mYears = Array.isArray(manifest.years) ? manifest.years : [];
-  if (mMonths.length) {
-    AVAILABLE_MONTHS = mMonths;
-    AVAILABLE_YEARS = mYears.length ? mYears : [...new Set(mMonths.map(m => m.slice(0, 4)))];
-    const list = state.gran === "month" ? AVAILABLE_MONTHS : AVAILABLE_YEARS;
-    state.period = list.includes(state.period) ? state.period : list[list.length - 1];
-  }
-  const months = state.gran === "month" ? [state.period] : (AVAILABLE_MONTHS.length ? AVAILABLE_MONTHS.filter(m => m.startsWith(state.period + "-")) : SCAN_MONTHS.filter(m => m.startsWith(state.period + "-")));
-const acc = { meals: [], workouts: [], sleep: [], daily: [], body_comp: [], water: [], all_body_comp: [] };
-  for (const m of months) {
-    acc.meals = acc.meals.concat(await loadJSON(`${DATA_PATH}/meals/${m}.json`));
-    acc.workouts = acc.workouts.concat(await loadJSON(`${DATA_PATH}/workouts/${m}.json`));
-    acc.sleep = acc.sleep.concat(await loadJSON(`${DATA_PATH}/sleep/${m}.json`));
-    acc.daily = acc.daily.concat(await loadJSON(`${DATA_PATH}/daily/${m}.json`));
-    acc.water = acc.water.concat(await loadJSON(`${DATA_PATH}/water/${m}.json`));
-  }
-  const bcMonths = AVAILABLE_MONTHS.length ? AVAILABLE_MONTHS : SCAN_MONTHS;
-  for (const m of bcMonths) {
-    acc.all_body_comp = acc.all_body_comp.concat(await loadJSON(`${DATA_PATH}/body_comp/${m}.json`));
-  }
-  acc.body_comp = acc.all_body_comp.filter(inPeriod);
+  if (bundle) return bundleToData(bundle);
 
-  // 无真实数据可用时回退到仓库自带的示例数据，保证演示环境也能出图
+  // 2) HTTP 托管模式：按月 JSON（file:// 下 fetch 必被 CORS 拦截，直接跳过）
+  let acc = { meals: [], workouts: [], sleep: [], daily: [], body_comp: [], water: [], all_body_comp: [] };
+  if (location.protocol !== "file:") {
+    const manifest = await loadManifest(`${DATA_PATH}/manifest.json`);
+    const mMonths = Array.isArray(manifest.months) ? manifest.months : [];
+    const mYears = Array.isArray(manifest.years) ? manifest.years : [];
+    if (mMonths.length) {
+      AVAILABLE_MONTHS = mMonths;
+      AVAILABLE_YEARS = mYears.length ? mYears : [...new Set(mMonths.map(m => m.slice(0, 4)))];
+      const list = state.gran === "month" ? AVAILABLE_MONTHS : AVAILABLE_YEARS;
+      state.period = list.includes(state.period) ? state.period : list[list.length - 1];
+    }
+    const months = state.gran === "month" ? [state.period] : (AVAILABLE_MONTHS.length ? AVAILABLE_MONTHS.filter(m => m.startsWith(state.period + "-")) : SCAN_MONTHS.filter(m => m.startsWith(state.period + "-")));
+    for (const m of months) {
+      acc.meals = acc.meals.concat(await loadJSON(`${DATA_PATH}/meals/${m}.json`));
+      acc.workouts = acc.workouts.concat(await loadJSON(`${DATA_PATH}/workouts/${m}.json`));
+      acc.sleep = acc.sleep.concat(await loadJSON(`${DATA_PATH}/sleep/${m}.json`));
+      acc.daily = acc.daily.concat(await loadJSON(`${DATA_PATH}/daily/${m}.json`));
+      acc.water = acc.water.concat(await loadJSON(`${DATA_PATH}/water/${m}.json`));
+    }
+    const bcMonths = AVAILABLE_MONTHS.length ? AVAILABLE_MONTHS : SCAN_MONTHS;
+    for (const m of bcMonths) {
+      acc.all_body_comp = acc.all_body_comp.concat(await loadJSON(`${DATA_PATH}/body_comp/${m}.json`));
+    }
+    acc.body_comp = acc.all_body_comp.filter(inPeriod);
+  }
+
+  // 3) 无真实数据时回退到仓库自带的示例数据，保证演示环境也能出图
   if (!acc.meals.length && !acc.daily.length && !acc.workouts.length && !acc.sleep.length) {
     const sample = await loadBundle(["data.sample.js"]);
-    if (sample) {
-      const raw = { meals: sample.meals||[], workouts: sample.workouts||[], sleep: sample.sleep||[],
-                    daily: sample.daily||[], body_comp: sample.body_comp||[], water: sample.water||[] };
-      applyPeriods([raw.meals, raw.workouts, raw.sleep, raw.daily, raw.body_comp, raw.water]);
-      return { meals: raw.meals.filter(inPeriod), workouts: raw.workouts.filter(inPeriod),
-               sleep: raw.sleep.filter(inPeriod), daily: raw.daily.filter(inPeriod),
-               body_comp: raw.body_comp.filter(inPeriod), water: raw.water.filter(inPeriod),
-               all_body_comp: raw.body_comp };
-    }
+    if (sample) return bundleToData(sample);
   }
   return acc;
+}
+
+// 把数据包转换为面板所需结构，并按当前周期过滤
+function bundleToData(bundle) {
+  const raw = { meals: bundle.meals||[], workouts: bundle.workouts||[], sleep: bundle.sleep||[],
+                daily: bundle.daily||[], body_comp: bundle.body_comp||[], water: bundle.water||[],
+                medical: bundle.medical||[], naps: bundle.naps||[] };
+  // 先按全量记录推导可选周期，再按当前周期过滤
+  applyPeriods([raw.meals, raw.workouts, raw.sleep, raw.daily, raw.body_comp, raw.water]);
+  return { meals: raw.meals.filter(inPeriod), workouts: raw.workouts.filter(inPeriod),
+           sleep: raw.sleep.filter(inPeriod), daily: raw.daily.filter(inPeriod),
+           body_comp: raw.body_comp.filter(inPeriod), water: raw.water.filter(inPeriod),
+           all_body_comp: raw.body_comp };
 }
 
 function buckets(allRecords) {
