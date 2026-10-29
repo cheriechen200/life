@@ -373,14 +373,18 @@ const app = document.getElementById("app");
   const h = avgSleep ? Math.floor(avgSleep / 60) : "-";
   const mm = avgSleep ? Math.round(avgSleep % 60) : "";
 
+  // 值为 0 时不应显示为 "-"，用显式空值判断而非 ||
+  const num = (v, digits = 0) => (typeof v === "number" && !isNaN(v)
+    ? (digits ? Number(v.toFixed(digits)) : Math.round(v)) : "-");
+
   document.getElementById("summary").innerHTML =
-    statCard("训练次数", w.length || "-", "次") +
-    statCard("训练总时长", Math.round(wMin) || "-", "分钟") +
-    statCard("运动消耗", Math.round(wBurn) || "-", "kcal") +
+    statCard("训练次数", w.length ? w.length : "-", "次") +
+    statCard("训练总时长", wMin ? num(wMin) : "-", "分钟") +
+    statCard("运动消耗", wBurn ? num(wBurn) : "-", "kcal") +
     statCard("平均睡眠", `${h}${mm !== "" ? `<small>h</small>${mm}` : ""}`, mm !== "" ? "m" : "") +
-    statCard("日均步数", avgSteps ? Math.round(avgSteps).toLocaleString() : "-", "") +
-    statCard("平均静息心率", avgRhr ? Math.round(avgRhr) : "-", "bpm") +
-    (wt.length ? statCard("日均饮水", Math.round(sum(wt.map(r => r.metrics.amount_ml)) / dayCount), "ml") : "");
+    statCard("日均步数", avgSteps !== null ? avgSteps.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "-", "") +
+    statCard("平均静息心率", avgRhr !== null ? num(avgRhr) : "-", "bpm") +
+    (wt.length ? statCard("日均饮水", num(sum(wt.map(r => r.metrics.amount_ml)) / dayCount), "ml") : "");
 
   if (!labels.length) { app.innerHTML = '<div class="empty">该周期暂无数据。</div>'; return; }
 
